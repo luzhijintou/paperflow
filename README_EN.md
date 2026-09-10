@@ -82,6 +82,7 @@ An honest comparison — not a claim to replace anything. PaperFlow deliberately
 ### 3.1 Library
 
 - **Import** by drag & drop / file picker / path, or drop PDFs into a watched inbox folder (watchdog + debounce) — new files are imported and indexed automatically
+- **Password-protected PDFs** import as “needs password” and open with a password prompt; ticking “remember password” (stored only in your local database) builds the full-text index automatically, and OCR works too
 - **Grid / list views** with high-resolution covers (PDF first page / EPUB embedded cover), authors, year, page count, import time
 - **Collections / tags / status filters** with sorting
 - **Smart deduplication**: exact SHA-256, near-duplicate MinHash, and title-similarity version suggestions with one-click merge in the inbox
@@ -212,6 +213,7 @@ flowchart LR
 - **Data portability**: `data/` = one SQLite database + original files; copy the folder at any time; exports are open JSON / Markdown
 - **AI is optional**: point it at Ollama for fully local inference — your papers never leave the machine; with nothing configured, no AI call is ever made
 - **API security**: optional API key; the server binds to localhost only by default
+- **A clean library folder**: the embedded window's (WebView2) cache and config live in `%LOCALAPPDATA%\PaperFlow\`, never in `data/` — which holds only the database, file copies, and logs
 
 ## 8. FAQ
 
@@ -245,7 +247,8 @@ Listed honestly so you can decide whether it fits you:
 - **Single-machine app**: no built-in cloud sync or collaboration; syncing `data/` via cloud drives carries SQLite lock risks
 - **No citation management**: BibTeX import, citation styles, and Word plugins are out of scope — leave those to Zotero / EndNote; PaperFlow focuses on the reading and knowledge-internalization stage
 - **Libraries beyond ~10k documents are not stress-tested**: the thousand-document scale is validated in daily use; feedback welcome beyond that
-- **v0.1.0 is an early release**: the data format may evolve — back up `data/` before upgrading
+- **Fast-moving 0.x releases (currently v0.8.0)**: the data format may evolve — back up `data/` before upgrading
+- **AV heuristic false positives are possible**: the app is unsigned and its embedded browser writes cache files on startup. The browser cache now lives outside the library folder (`%LOCALAPPDATA%\PaperFlow\`) with a 1 MB disk-cache cap; if a scanner still flags it (e.g. a 360 “ransomware protection” false positive), allow it and please report it
 
 ## 10. Contributing
 
