@@ -2,7 +2,7 @@
 
 # PaperFlow
 
-**A local-first literature manager — read · search · connect · remember**
+**A local-first document manager — read · search · connect · remember**
 
 [![Release](https://img.shields.io/github/v/release/luzhijintou/paperflow?style=flat-square&color=4f46e5)](https://github.com/luzhijintou/paperflow/releases/latest)
 [![License](https://img.shields.io/github/license/luzhijintou/paperflow?style=flat-square)](LICENSE)
@@ -26,7 +26,7 @@
 - [2. Positioning vs. Cloud Reference Managers](#2-positioning-vs-cloud-reference-managers)
 - [3. Core Features](#3-core-features)
 - [4. Getting Started](#4-getting-started)
-- [5. A Recommended Research Workflow](#5-a-recommended-research-workflow)
+- [5. A Recommended Workflow](#5-a-recommended-workflow)
 - [6. Architecture](#6-architecture)
 - [7. Privacy & Data Sovereignty](#7-privacy--data-sovereignty)
 - [8. FAQ](#8-faq)
@@ -41,9 +41,9 @@
 
 ## 1. What is PaperFlow?
 
-PaperFlow is a **local-first** literature manager: every imported PDF / EPUB becomes a node that is full-text searchable, annotatable, reviewable, and connected in a knowledge graph. It does not try to replace Zotero's citation-formatting pipeline; instead it answers a more basic question:
+PaperFlow is a **local-first** document manager: every imported PDF / EPUB becomes a node that is full-text searchable, annotatable, reviewable, and connected in a knowledge graph. It does not try to replace Zotero's citation-formatting pipeline; instead it answers a more basic question:
 
-> Once a paper is saved into a folder, **how do the things you read get found, remembered, and recalled?**
+> Once a document is saved into a folder, **how do the things you read get found, remembered, and recalled?**
 
 To that end, PaperFlow ships a complete reading loop:
 
@@ -53,12 +53,14 @@ To that end, PaperFlow ships a complete reading loop:
 | **Search** | SQLite FTS5 inverted index with `jieba` Chinese segmentation; titles, authors, abstracts, and body text in one index; millisecond queries |
 | **Read** | A pdf.js-powered PDF reader and a chapter-based EPUB reader; vertical scroll or paged mode |
 | **Annotate** | Select-to-highlight (4 colors), notes, **bidirectional links between documents**, one-click flashcards |
-| **Connect** | TF-IDF semantic similarity recommends related papers; Obsidian-style force-directed knowledge graph |
+| **Connect** | TF-IDF semantic similarity recommends related documents; Obsidian-style force-directed knowledge graph |
 | **Remember** | Day-based spaced-repetition scheduling on the **Ebbinghaus forgetting curve** (1 / 2 / 4 / 7 / 15 / 30-day ladder) |
 | **Organize** | Visual if-then rule engine, SHA-256 / MinHash smart deduplication, optional AI summaries and tagging (fully local capable) |
-| **Export** | Whole-library JSON, per-paper Markdown, Obsidian, and Anki one-click export; full REST API |
+| **Export** | Whole-library JSON, per-document Markdown, Obsidian, and Anki one-click export; full REST API |
 
 All data (SQLite database + original file copies) lives in a single local `data/` folder. The app runs fully offline — no account, no telemetry, no cloud dependency. The UI is available in **Chinese and English** (Settings → Language).
+
+PaperFlow is **not limited to academic work**: papers, technical reports, manuals, standards, textbooks, e-books — even light novels and art books — anything in PDF / EPUB gets the same search, annotation, linking, and review capabilities.
 
 ## 2. Positioning vs. Cloud Reference Managers
 
@@ -100,7 +102,7 @@ An honest comparison — not a claim to replace anything. PaperFlow deliberately
 
 ### 3.3 Close reading & annotation
 
-- **Select text to act**: highlight (4 colors), note, create a **bidirectional link** to another paper, or generate a review card; drag-select or **right-click a word** (word-aware for Chinese) — native browser menus are kept outside the page
+- **Select text to act**: highlight (4 colors), note, create a **bidirectional link** to another document, or generate a review card; drag-select or **right-click a word** (word-aware for Chinese) — native browser menus are kept outside the page
 - **In-document find (PDF)**: `Ctrl/Cmd+F` paints solid, readable highlights, outlines the current match and scrolls it into view; `‹ ›` / Enter step through matches; `→ ← Space PgUp PgDn Home End` page-turn and `+ - 0` zoom shortcuts included
 - **TOC sidebar**: PDF outline / EPUB chapter list with active-entry tracking while you read; click to jump
 - **PDF two-up (book-spread) browsing**: available in both vertical and horizontal modes — the cover stands alone, then pages pair up even-left / odd-right; the `↑↓` buttons and arrow keys step by **whole spreads**
@@ -137,7 +139,7 @@ An honest comparison — not a claim to replace anything. PaperFlow deliberately
 
 ### 3.7 Open data
 
-- **Whole-library JSON export**; **per-paper Markdown export** (frontmatter / summary / annotations / backlinks)
+- **Whole-library JSON export**; **per-document Markdown export** (frontmatter / summary / annotations / backlinks)
 - **Obsidian export**: notes interlinked with `[[wikilinks]]`, dropped straight into your vault; documents whose titles normalize to the same name get `_2` / `_3` suffixes instead of overwriting each other (each note carries a `paperflow_id` marker, so re-exporting updates its own note in place)
 - **Anki export**: pushed via AnkiConnect; the note type and front / back fields are configurable in Settings, fields are verified before pushing, and “duplicates skipped” vs. “real failures” are counted and reported separately
 - **Full REST API**: OpenAPI docs at `/api/docs`, optional API key, event webhooks (see [§9](#9-rest-api-selected))
@@ -220,14 +222,14 @@ To point the packaged exe at an existing library, set the environment variable:
 $env:PAPERFLOW_DATA="D:\path\to\paperflow\data"; .\dist\PaperFlow\PaperFlow.exe
 ```
 
-## 5. A Recommended Research Workflow
+## 5. A Recommended Workflow
 
 A loop that has been validated in daily use — matching the four screenshots above:
 
 1. **Import & organize** — drop new PDFs into the inbox folder; the rule engine tags and sorts them; duplicates merge in one click
-2. **Read & annotate** — highlight key claims, write notes, and create bidirectional links to older papers on the same method
-3. **Make cards & review** — turn 2–3 core conclusions into flashcards per paper; clear the daily due queue with the Ebbinghaus scheduler
-4. **Connect & rediscover** — when writing a review, open the graph and surface papers you read but forgot; double-click to jump back to the text
+2. **Read & annotate** — highlight key points, write notes, and create bidirectional links to related older documents
+3. **Make cards & review** — turn 2–3 core takeaways into flashcards per document; clear the daily due queue with the Ebbinghaus scheduler
+4. **Connect & rediscover** — when revisiting a topic, open the graph and surface documents you read but forgot; double-click to jump back to the text
 5. **Consolidate & export** — periodically export Markdown / Obsidian and merge annotations and backlinks into your long-term note system
 
 ## 6. Architecture
@@ -309,7 +311,7 @@ paperflow/
 
 - **No account, no telemetry, no forced networking**: every core feature works with the cable unplugged
 - **Data portability**: `data/` = one SQLite database + original files; copy the folder at any time; exports are open JSON / Markdown
-- **AI is optional**: point it at Ollama for fully local inference — your papers never leave the machine; with nothing configured, no AI call is ever made
+- **AI is optional**: point it at Ollama for fully local inference — your documents never leave the machine; with nothing configured, no AI call is ever made
 - **API security**: optional API key; the server binds to localhost only by default
 - **A clean library folder**: the embedded window's (WebView2) cache and config live in `%LOCALAPPDATA%\PaperFlow\`, never in `data/` — which holds only the database, file copies, and logs
 
@@ -417,7 +419,7 @@ Listed honestly so you can decide whether it fits you:
 
 **P3+ plans (not included yet)**
 
-- **Citation graph**: GROBID reference parsing + Crossref / OpenAlex disambiguation
+- **Citation graph** (for academic PDFs): GROBID reference parsing + Crossref / OpenAlex disambiguation
 - **Automatic TOC generation**: font-size heuristics (native PDFs) → layout model (scans) + human confirmation
 - **Multi-document comparison**: side-by-side page sync + text / pixel diffs
 - **Collaboration**: read-only share links first; multi-user permissions / comment threads as a separate server-mode plugin
@@ -444,5 +446,5 @@ Third-party components: pdf.js (Apache-2.0), cytoscape.js (MIT), jieba (MIT), py
 ---
 
 <div align="center">
-<sub>If PaperFlow helps your research, consider giving it a star ⭐</sub>
+<sub>If PaperFlow is useful to you, consider giving it a star ⭐</sub>
 </div>
