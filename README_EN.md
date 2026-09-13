@@ -125,6 +125,7 @@ An honest comparison — not a claim to replace anything. PaperFlow deliberately
 ### 3.5 Ebbinghaus spaced review
 
 - Turn any highlight or selection into a flashcard; cards are scheduled on the forgetting curve: a fixed day ladder `1 → 2 → 4 → 7 → 15 → 30`
+- Card text is **rebuilt** from the page layout: PDF hard line breaks (CJK lines joined, a space inserted between CJK and Latin), hyphenated words and decomposed accents are normalized, paragraphs preserved as blank lines
 - Four grades: **Easy** skips ahead, **Good** advances the ladder, **Hard** repeats the same day, **Forgot** returns to day 1; after the ladder, intervals grow adaptively by an ease factor
 - Every grade previews the next review date; a persistent **due counter** lives in the navigation rail
 
@@ -148,7 +149,7 @@ An honest comparison — not a claim to replace anything. PaperFlow deliberately
 
 ### 4.1 Windows build (recommended)
 
-1. Download `PaperFlow-win64-*.zip` from [**Releases**](https://github.com/luzhijintou/paperflow/releases/latest) (current version **v0.8.0** — see the [CHANGELOG](CHANGELOG.md))
+1. Download `PaperFlow-win64-*.zip` from [**Releases**](https://github.com/luzhijintou/paperflow/releases/latest) (current version **v0.9.0** — see the [CHANGELOG](CHANGELOG.md))
 2. Extract anywhere (e.g. `D:\PaperFlow`)
 3. Double-click `PaperFlow.exe`
 
@@ -193,7 +194,7 @@ python run_desktop.py --url-only      # backend only, print the URL (for scripts
 ```
 
 - On Windows you can also double-click **`PaperFlow.bat`** (console attached, handy for logs) or **`PaperFlow.vbs`** (silent launch) in the repo root
-- Single-instance friendly: if a PaperFlow is already serving the target port, it is reused instead of starting a second server
+- Multi-window friendly: relaunching never starts a second server — it reuses the running instance and just opens **another window**; closing any window leaves the others working, and the backend stops only after the last window exits
 - For a **true embedded window** (WebView2 / WebKit) instead of browser app mode: `pip install -r requirements-desktop.txt` (installs `pywebview`); startup detects it and prefers it, otherwise falls back transparently
 
 **Building a standalone `.exe` (no Python needed to run, redistributable)**:
@@ -378,7 +379,7 @@ python run.py &                   # start the server first (port 8300 by default
 #   python run.py --port 8399 &
 #   PF_TEST_BASE=http://127.0.0.1:8399 python tools/test_backend.py
 
-python tools/test_backend.py      # 107 end-to-end assertions: import / dedup / search / similar / annotations / links / graph / tags / Ebbinghaus / progress / rules / exports / encrypted-PDF flow (self-cleaning; safe on a real library)
+python tools/test_backend.py      # 122 end-to-end assertions: import / dedup / search / similar / annotations / links / graph / tags / Ebbinghaus / progress / rules / exports / encrypted-PDF / API-key auth flows (self-cleaning; safe on a real library)
 python tools/test_epub.py         # 55 EPUB-pipeline checks: import / metadata / search / TOC / chapter sanitization (XSS) / CSS scoping / full-page SVG covers / ruby / asset traversal rejection / cover / progress
 python tools/test_title.py        # title consistency: filename wins / temp names fall back to metadata
 python tools/test_background.py   # custom background API: upload / type checks / opacity merge / delete cleanup
@@ -387,13 +388,22 @@ python tools/smoke_readonly.py    # read-only smoke over the endpoints (incl. Ch
 python tools/check_imports.py     # frontend module graph consistency
 node --check frontend/js/**/*.js  # frontend syntax
 
+# Frontend pure logic (plain node, no server needed)
+node tools/test_textnorm.mjs      # card text rebuild, 12 checks: hyphen joining / CJK line breaks / CJK-Latin spacing / accent composition / paragraph preservation / idempotence
+node tools/test_graphsim.mjs      # graph force simulation, 12 checks: convergence / parameter response / dragging / edge cases
+
+# Frontend interaction (needs Playwright; targets 8300 by default, --base to switch)
+python tools/test_rightclick.py   # right-click word selection outside fullscreen: on-word / gap snap / blank rejection / existing selection kept / fullscreen round-trip; --cdp host:port attaches to the real WebView2 window
+
 # Desktop client (no server needed first)
 python tools/test_desktop_logic.py  # port parsing / single-instance / browser detection
+python tools/test_multiwin.py       # multi-window lifecycle: closing one window keeps the rest alive; the server stops after the last window exits
 python build_exe.py                 # build dist/PaperFlow/PaperFlow.exe
 python tools/test_frozen_exe.py     # frozen exe: serves API + frontend + static assets
+python tools/pack_release.py        # one-shot release pack: version read + static assertions + extract-and-boot verification
 ```
 
-Current status: backend end-to-end **107/107** (including 13 checks for the encrypted-PDF flow), EPUB pipeline **55/55**, title consistency 5/5, background-image API 21/21; the frontend views render correctly under headless-browser DOM verification, and reader interactions (single-row toolbar, up/down paging in all four combinations, in-document find highlight & centering, right-click selection popping the toolbar, fullscreen overlay re-parenting) are verified.
+Current status: backend end-to-end **122/122** (including 13 checks for the encrypted-PDF flow and 15 for API-key auth), EPUB pipeline **55/55**, card text rebuild **12/12**, graph layout 12/12, title consistency 5/5, background-image API 21/21; multi-window lifecycle and right-click selection (verified over CDP against the real WebView2 window) pass; the frontend views render correctly under headless-browser DOM verification, and reader interactions (single-row toolbar, up/down paging in all four combinations, in-document find highlight & centering, right-click selection popping the toolbar, fullscreen overlay re-parenting) are verified.
 
 The repo also ships demo-library seeding scripts (`tools/make_samples.py` → `make_multipage.py` → `make_chinese_sample.py` → `seed_demo.py`) that generate and import mixed Chinese/English samples in one chain.
 
@@ -406,9 +416,9 @@ Listed honestly so you can decide whether it fits you:
 - **Single-machine app**: no built-in cloud sync or collaboration; syncing `data/` via cloud drives carries SQLite lock risks
 - **No citation management**: BibTeX import, citation styles, and Word plugins are out of scope — leave those to Zotero / EndNote; PaperFlow focuses on the reading and knowledge-internalization stage
 - **Libraries beyond ~10k documents are not stress-tested**: the thousand-document scale is validated in daily use; feedback welcome beyond that
-- **Fast-moving 0.x releases (currently v0.8.0)**: the data format may evolve — back up `data/` before upgrading
+- **Fast-moving 0.x releases (currently v0.9.0)**: the data format may evolve — back up `data/` before upgrading
 - **AV heuristic false positives are possible**: the app is unsigned and its embedded browser writes cache files on startup. The browser cache now lives outside the library folder (`%LOCALAPPDATA%\PaperFlow\`) with a 1 MB disk-cache cap; if a scanner still flags it (e.g. a 360 “ransomware protection” false positive), allow it and please report it
-- **AES-encrypted PDFs**: text extraction for AESV2 / V5 files is not available yet (reading them in the reader works fine with the password; server-side extraction / OCR needs an extra crypto dependency that ships later)
+- **AES-encrypted PDFs (AESV2 / V5)**: the packaged build bundles `cryptography` since v0.9.0 — unlock with the password and the full-text index is built right away (AES-256 verified end-to-end); source runs need `pip install cryptography` (not shipped in `deps/`), otherwise import reports the file as using an unsupported encryption method
 
 ## 12. Roadmap
 
