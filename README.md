@@ -125,6 +125,7 @@ PaperFlow **不局限于学术场景**：论文、技术报告、产品手册、
 ### 3.5 艾宾浩斯间隔复习
 
 - 从批注或选区一键生成卡片；卡片按**遗忘曲线**排程：固定日间隔阶梯 `1 → 2 → 4 → 7 → 15 → 30` 天
+- 制卡正文按页面版面**重建**：PDF 硬换行（中文跨行相接、中英之间补空格）、连字符断词、组合重音自动规整，段落保留空行
 - 评分四档：**简单**跳一档、**良好**按阶梯推进、**困难**原地重复、**忘记**回到第 1 天；走完阶梯后按 ease 因子自适应延长
 - 每次评分实时预览"下次复习时间"；顶部导航常驻**待复习计数**
 
@@ -148,7 +149,7 @@ PaperFlow **不局限于学术场景**：论文、技术报告、产品手册、
 
 ### 4.1 Windows 安装包（推荐）
 
-1. 前往 [**Releases**](https://github.com/luzhijintou/paperflow/releases/latest) 下载 `PaperFlow-win64-*.zip`（当前版本 **v0.8.0**，更新见 [CHANGELOG](CHANGELOG.md)）
+1. 前往 [**Releases**](https://github.com/luzhijintou/paperflow/releases/latest) 下载 `PaperFlow-win64-*.zip`（当前版本 **v0.9.0**，更新见 [CHANGELOG](CHANGELOG.md)）
 2. 解压到任意位置（如 `D:\PaperFlow`）
 3. 双击 `PaperFlow.exe`
 
@@ -193,7 +194,7 @@ python run_desktop.py --url-only      # 只起后端、不开窗口（打印 URL
 ```
 
 - Windows 下也可双击仓库根目录的 **`PaperFlow.bat`**（带控制台，便于看日志）或 **`PaperFlow.vbs`**（静默启动）快速开始
-- 单实例友好：若检测到目标端口已有 PaperFlow 在跑，会直接复用、不再重复起服务
+- 多窗口友好：重复启动不会新起服务，而是复用现有实例**再开一个窗口**；关闭任一窗口不影响其余窗口，最后一个窗口退出后后台服务自动停止
 - 想要**真正内嵌的原生窗口**（WebView2 / WebKit）而非浏览器 app 模式：`pip install -r requirements-desktop.txt`（安装 `pywebview`）后启动时自动检测并优先使用，检测不到则透明回退
 
 **打包成独立 `.exe`（无需 Python，可分发）**：
@@ -378,7 +379,7 @@ python run.py &                   # 先启动服务（默认 8300）
 #   python run.py --port 8399 &
 #   PF_TEST_BASE=http://127.0.0.1:8399 python tools/test_backend.py
 
-python tools/test_backend.py      # 后端端到端 107 项：导入 / 去重 / 搜索 / 相似 / 批注 / 链接 / 图谱 / 标签 / 艾宾浩斯 / 进度 / 规则 / 导出 / 加密 PDF 全流程（自带清理，可在真实库上安全运行）
+python tools/test_backend.py      # 后端端到端 122 项：导入 / 去重 / 搜索 / 相似 / 批注 / 链接 / 图谱 / 标签 / 艾宾浩斯 / 进度 / 规则 / 导出 / 加密 PDF / API Key 鉴权全流程（自带清理，可在真实库上安全运行）
 python tools/test_epub.py         # EPUB 管线 55 项：导入 / 元数据 / 搜索 / 目录 / 章节消毒(XSS) / CSS 作用域 / 整页 SVG 包图 / ruby / 资产穿越拒绝 / 封面 / 进度
 python tools/test_title.py        # 导入标题一致性：文件名优先 / 临时名回退元数据
 python tools/test_background.py   # 自定义背景图 API：上传 / 类型校验 / 透明度合并 / 删除清理
@@ -387,13 +388,22 @@ python tools/smoke_readonly.py    # 只读端点冒烟（含中文搜索），�
 python tools/check_imports.py     # 前端模块导入图自洽
 node --check frontend/js/**/*.js  # 前端语法
 
+# 前端纯逻辑（node 直跑，无需服务器）
+node tools/test_textnorm.mjs      # 卡片文本重建 12 项：连字符断词 / 中文跨行 / 中英间距 / 重音合成 / 段落保留 / 幂等
+node tools/test_graphsim.mjs      # 图谱布局力模拟 12 项：力学收敛 / 参数响应 / 拖拽 / 边界情形
+
+# 前端交互（需 Playwright；默认连 8300，--base 可换实例）
+python tools/test_rightclick.py   # 非全屏右键选词：词上 / 缝隙吸附 / 空白拒绝 / 已有选区保持 / 全屏往返；--cdp host:port 接入真实 WebView2 窗口
+
 # 桌面客户端（不需先起服务）
 python tools/test_desktop_logic.py  # 端口解析 / 单实例 / 浏览器探测等纯逻辑
+python tools/test_multiwin.py       # 多窗口生命周期：关一个窗口不影响其余窗口；最后一个窗口退出后服务自动停止
 python build_exe.py                 # 打包 dist/PaperFlow/PaperFlow.exe
 python tools/test_frozen_exe.py     # 冻结 exe：起服务 + 提供前端 / 静态资源
+python tools/pack_release.py        # 一键重打发布包：读版本号 + 静态断言 + 解压实跑验证
 ```
 
-当前状态：后端端到端 **107/107**（含加密 PDF 全流程 13 项）、EPUB 管线 **55/55**、标题一致性 5/5、背景图 API 21/21 通过；前端各视图经无头浏览器 DOM 校验正常渲染，阅读器交互（工具栏单行布局、上下翻页定位（竖向 / 横向 × 单页 / 双页四条路径逐一验证）、页内查找高亮与居中、右键选中浮出工具条、全屏下的浮层挂载）通过校验。
+当前状态：后端端到端 **122/122**（含加密 PDF 全流程 13 项、API Key 鉴权 15 项）、EPUB 管线 **55/55**、卡片文本重建 **12/12**、图谱布局 12/12、标题一致性 5/5、背景图 API 21/21 通过；多窗口生命周期与右键选词（含真实 WebView2 窗口经 CDP 实测）通过校验；前端各视图经无头浏览器 DOM 校验正常渲染，阅读器交互（工具栏单行布局、上下翻页定位（竖向 / 横向 × 单页 / 双页四条路径逐一验证）、页内查找高亮与居中、右键选中浮出工具条、全屏下的浮层挂载）通过校验。
 
 仓库附带演示库生成脚本（`tools/make_samples.py` → `make_multipage.py` → `make_chinese_sample.py` → `seed_demo.py`），一条链生成中英混合样例并导入，方便开发时快速看到各功能生效。
 
@@ -406,9 +416,9 @@ python tools/test_frozen_exe.py     # 冻结 exe：起服务 + 提供前端 / �
 - **单机应用**：无内置云同步、无多人协作；多端经网盘同步 `data/` 有 SQLite 锁风险
 - **不做引文管理**：BibTeX 导入、引文样式排版、Word 引用插件不在范围内——这些请交给 Zotero / EndNote，PaperFlow 定位于阅读与知识内化环节
 - **万级以上文档库未经充分压测**：千级规模经过日常验证；更大规模欢迎反馈
-- **版本迭代较快（当前 v0.8.0）**：数据格式可能随版本演进，升级前请备份 `data/` 目录
+- **版本迭代较快（当前 v0.9.0）**：数据格式可能随版本演进，升级前请备份 `data/` 目录
 - **可能被杀软启发式误报**：程序未做代码签名，且内嵌浏览器组件启动时会写入缓存文件。缓存已移出文档库目录（改到 `%LOCALAPPDATA%\PaperFlow\`）并将磁盘缓存上限压到 1 MB；若仍被拦截（如 360「勒索防护」误报），请选择放行并欢迎反馈
-- **AES 加密 PDF 的文本提取待补全**：带 AES 加密（AESV2 / V5）的 PDF 可在阅读器中正常输入密码阅读，但服务端抽文本 / OCR 需要额外的加密依赖，当前提示不支持（有网络后即可补装）
+- **AES 加密 PDF（AESV2 / V5）**：打包版自 v0.9.0 起内置 `cryptography`，导入后输密码解锁即可建立全文索引（AES-256 全流程已实测通过）；源码运行需自行 `pip install cryptography`（`deps/` 未收录），缺失时导入会提示「当前版本不支持的加密方式」
 
 ## 12. 路线图
 
