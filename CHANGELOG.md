@@ -5,6 +5,96 @@
 
 ---
 
+## 2026-09-14 · v0.9.0 发布：GitHub Release 上传 + 中英 README 更新（多窗口 / 测试数 / AES 实测）
+
+**中英 README 更新**（已随本次上传同步到 GitHub）
+- §4.3「单实例友好」→ **多窗口友好**：重复启动不会新起服务，而是复用现有实例再开一个窗口；关闭任一窗口不影响其余窗口，最后一个窗口退出后后台服务自动停止——与 v0.9.0 的多窗口生命周期修复保持一致
+- §3.5 复习：新增「制卡正文按页面版面**重建**」条目（连字符断词 / 中文跨行相接 / 中英间距 / 组合重音 / 段落保留）
+- §10 测试清单与状态行刷新：后端 **107 → 122 项**（补 API Key 鉴权 15 项）；补录 `test_textnorm.mjs`（12 项）与 `test_graphsim.mjs`（12 项）、新增 `test_rightclick.py`（含 `--cdp` 真实 WebView2 窗口模式）、`test_multiwin.py`、`pack_release.py` 条目；「当前状态」段补记账卡文本重建 12/12、图谱布局 12/12、多窗口生命周期与真实窗口右键选词（CDP）通过
+- §11 已知限制：**AES 条目由「待补全」改为「打包版已内置 cryptography」**——见下方实测
+
+**AES 加密 PDF 实测（打包版，与生产库完全隔离）**：pypdf 6.17 从真实样例生成 AES-256 加密 PDF → 设 `PAPERFLOW_DATA` 指向临时目录启动 `dist\PaperFlow\PaperFlow.exe --url-only` → 走真实 API 全流程：导入 `locked`（`has_text:false`）→ 输密码解锁 `pages=1, has_text=True, status=ready` → `/api/search` 命中解密正文 → 文档终态 `ready` —— **全部通过**。v0.9.0 构建新纳入 cryptography 的意图得到功能确认；源码运行仍不含该依赖（`deps\` 未收录），README 已如实区分两种运行方式。
+
+**GitHub 发布**
+- `README.md` / `README_EN.md` 经 Contents API 更新（commit `8a845f31…` / `d9f470d3…`），回读 sha256 与本地逐字节一致（`1663f987…` / `7a210e34…`）
+- 创建 Release **v0.9.0**（tag `v0.9.0` → `main`，标题 `PaperFlow v0.9.0`，已是仓库 **Latest**——此前 Latest 为 v0.8.0）并上传资产 `PaperFlow-win64-v0.9.0.zip`（122.5 MB）；GitHub 端 digest `sha256:44edceb0…` 与本地 zip **逐字节一致**
+- 发布说明沿用 v0.8.0 同格式（下载引导 / 本次更新 / 自 v0.1.0 以来的主要更新 / SmartScreen 与误报提示 / 校验表）
+
+**环境坑（gh 经代理 TLS 挂死）**：gh（Go 运行时）经 UniClash 代理 7993 持续 `TLS handshake timeout`，而同代理下 curl / Python 正常——根因是 Go 1.24+ 的 ClientHello 默认携带后量子 key share（X25519MLKEM768），在这条代理链路上被丢弃；`GODEBUG=tlsmlkem=0` 后 gh 恢复正常（本次全部 gh 操作已用它跑通）。另：`gh release create` 在非 git 仓库目录下需显式 `--repo luzhijintou/paperflow`。两条均已记入记忆。
+
+---
+
+## 2026-09-13 · v0.9.0 补充②：非全屏右键选词「真凶」修复——pywebview text_select 注入的全局禁选样式
+
+**背景**：按要求核查「到底是选中特效没渲染，还是真的没选中」。为了看进真实窗口，给 exe 开 WebView2 远程调试口（`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9223"`），以 CDP 接入真实 Edge 151 WebView2 窗口，用真实鼠标输入复现并读取选区状态。结论先行：**真的没选中，不是渲染问题**——右键后浮动工具条弹出，但 `getSelection().toString()` 为空、无任何高亮；拖选同样失效（rangeCount=0）。此前两轮修复（`selectionCovers`、缝隙吸附、空白拒绝）本身正确且保留，但都作用在更上层——真凶在底层把整个选区清了。
+
+**定位过程**
+1. 文本层完好：span 有真实文本节点（50 字），选区端点 (span,0)→(span,1) 恰好完整覆盖该文本节点，`toString()` 却为空 → 选区被"修剪"，不是 DOM 问题。
+2. 页面里查出注入样式 `body {-webkit-user-select: none; -khtml-user-select: none; -ms-user-select: none; user-select: none; cursor: default;}`；用注入钩子（patch `appendChild` + `textContent` setter 记调用栈）抓到写入者（匿名脚本帧）；全仓库搜 `khtml` 零命中。
+3. 定位到 **pywebview 自带** `webview/js/customize.js` 的 `disableTextCss`：`text_select` 参数**默认 False**，pywebview 给每个页面注入这条全局禁选样式。现代 Chromium/WebView2 的 Selection 会**修剪** `user-select:none` 内容——程序化选区（右键选词）与拖选都被清空/不绘制；旧版 Chromium 不修剪，所以历史上有"有时能选"的假象；无头 Playwright 没有 pywebview 注入，永远测不出——这正是修了两轮仍"选不中"的真凶。
+4. 真实窗口内实验：临时给文本层加 `user-select: text` → 右键立即选中 "China"、高亮可见、拖选正常（截图对比：修前＝工具条＋无高亮；修后＝高亮＋工具条）。
+
+**🔧 修复**：`run_desktop.py` 创建窗口时加 `text_select=True`——pywebview 不再注入禁选样式，整个应用恢复正常文本选择行为。
+
+**🧪 测试能力升级**（`tools/test_rightclick.py`）：新增 `--cdp host:port` 模式，直接接入真实 WebView2 窗口跑同一套用例（真实输入 + 真实渲染，这是 headless 永远覆盖不到的路径）；新增金丝雀断言「文本层 computed user-select != none」。
+
+**✅ 验证（重建后的 exe，真实窗口，`--cdp 127.0.0.1:9223 --docs 46`）**：**6 passed / 0 failed**——金丝雀 ✓、词上右键（选区 "China " + 工具条）✓、缝隙扫掠 20/20 ✓、已有选区保持 ✓、全屏往返后复查 ✓；补测拖选："hina University of Petroleum - Beijing at Karama" ✓；截图确认高亮真实渲染。
+
+**📦 重建与重打**：备份生产数据（`backup\dist-data-20260913-v29`，2495 文件 / 1.097 GB）→ 重建冻结 exe（exit 0、0 崩溃、版本资源 0.9.0）→ 恢复数据（2495 文件一致）→ 冻结冒烟（~1.0s、`docs=32`）→ 重打 `release\PaperFlow-win64-v0.9.0.zip`（2209 成员 / 122.5 MB；成员清单与上版一致；`tools\pack_release.py` 19/0 全绿含解压实跑）→ 真实窗口验证如上 → 应用已按普通方式重启。新 exe sha256 `4bafd5ce…`、zip sha256 `44edceb0…`（`release\360-误报申诉说明.md` 已同步）。
+
+---
+
+## 2026-09-13 · v0.9.0 补充：非全屏右键选词仍失败的第二轮修复（缝隙吸附 + 空白选区拒绝 + 回归测试）
+
+**背景**：v0.9.0 的第一轮修复（`selectionCovers` 替换误用的 `containsNode`，见下一条目）实测后反馈**仍会出现**非全屏下右键无法选中。在源码服务器 + 用户真实文档副本（`CUPK-SC04-PRT.pdf` 导入 dev 库）上复现，定位到两个此前未覆盖的失败模式——
+
+1. **点进像素缝 = 完全没有选区**：pdf.js 文本层按词/行切 span，词与词、行与行、CJK 字与字之间存在 1–20px 的缝；点击落在缝里时 `caretRangeFromPoint` 返回空、也命不中任何 span，选词流程整段放弃 → 无选区、无工具条，正是用户看到的「无法选中」。
+2. **只选中一个空白字符 = 用户眼里仍是没选中**：右键落在纯空白 span（行首缩进、段间空行）上时，扩词只圈到一个空格——选区技术上非折叠、`toString()` 非空，但屏幕无可见高亮、也不弹工具条。
+
+**🔧 修复**（`frontend/js/views/reader.js`，纯前端）
+- `textSpanAt` 兜底改为**就近吸附**：精确命中优先，否则在容差内（纵向 `max(16, 行高)`、横向 `max(12, 行高 × 0.8)`）取欧氏距离最近的**有面积** span。
+- `selectWordAt` 改为**逐级降级、空白即失败**的链：`caretRangeFromPoint` 扩词 → 传入 span 内按字符矩形反推偏移扩词 → 整 span 全选 → 40px 内最近的非空白 span；任一步产出非空白选区即返回。
+- `expandToWord`：空白锚点先平移到最近可见字符；先显式落光标再走 `Selection.modify`（部分 WebView2 版本该 API 行为不稳）；返回前要求「非折叠**且非空白**」；字符类别回退扩词（CJK / 字母数字 / 词内 `-'`）逻辑不变。
+
+**✅ 验证**
+- 新增回归测试 `tools/test_rightclick.py`（Playwright；`--base` 可指向任意实例，默认 8300 自动挑选 3 篇带文本层的 PDF；每篇 6 项：词上右键出选区+工具条、行缝右键、跨 4 页缝隙扫掠（每处缝隙都必须产出非空白词文本）、已有选区时右键保持、全屏往返后复查词上/缝里）。用法：`python tools/test_rightclick.py --docs 46`。
+- doc 106（真实文档副本，9px 行缝）+ doc 71（15px 行缝）：**12 passed / 0 failed**；自动挑选 106/79/74：**18 passed / 0 failed**（行缝 12px / 22px；扫掠 22+22+20 处缝隙全部产出词文本）。连前轮临时探针（dev 全库逐篇、doc106 组合矩阵、缝隙扫掠）全部转绿。
+- 测试初版的两个「已有选区保持」用例曾失败，核实为**测试自身缺陷**（复位逻辑在右键前先清掉了选区；且跨页扫掠后仍用旧页坐标）——修正测试后全绿，修复本体未再改动。
+- `tools/test_textnorm.mjs` 12/12、`tools/check_imports.py` 干净、`tools/check_i18n.py` 0 缺译 / 0 后端漂移、`node --check reader.js` 通过。
+
+**📦 重建与重打（v0.9.0 包一并更新）**：本轮修复随 v0.9.0 包一并重打（版本号保持 `0.9.0` 同名覆盖——v0.9.0 尚未对外发布，无分发历史）。流程与结果——备份生产数据（`backup\dist-data-20260913-v28`，2495 文件 / 1.097 GB）→ 优雅关闭运行中的实例 → 重建冻结 exe（exit 0、0 崩溃、版本资源 0.9.0）→ 恢复数据（2495 文件一致）→ 冻结冒烟通过（~1.0s 就绪、`docs=32`）→ 重打 `release\PaperFlow-win64-v0.9.0.zip`（2209 成员 / 122.5 MB；成员清单与上一版逐条一致，仅 reader.js 内容变更；包内 exe 与 dist sha256 一致；新增标记断言 `nearbyNonBlankSpan`/`selIsBlank`，既有的 `selectionCovers`/`textnorm`/`node[?color]`/`review-meta`/`.card-back 左对齐` 全部保持通过）→ **解压实跑**：`/api/openapi.json` = `0.9.0`、`POST /api/presence` 与 unlock 端点齐备、空库 `documents=0`、`/` 与 `/js/textnorm.js` 正常从包内送达。重启应用后对真实实例（8300）的真实文档（46/45）跑 `tools/test_rightclick.py`：**11 passed / 0 failed**（含 21 + 19 处缝隙扫掠、已有选区保持、全屏往返复查）。打包 + 静态断言 + 解压实跑已固化为 `tools\pack_release.py`（版本号自动读取 `backend/api.py`，一键复跑）。新 exe sha256 `79de6564…`、zip sha256 `f314b1cc…`（`release\360-误报申诉说明.md` 已同步）。
+
+> 附注（发现但未修，与本轮无关）：应用启动时控制台有一条来自 vendor `cytoscape-fcose.min.js` 自初始化的 `Cannot read properties of undefined (reading 'layoutBase')` pageerror——图谱物理是自研 `graphsim.js`，fcose 从未被使用，不影响功能。dev 库测试副本（doc 106）已删除、临时探针与 8399 源码服务器已停并清理。
+
+---
+
+## v0.9.0 · 2026-09-13 · 多窗口生命周期修复 + 卡片文本渲染修复 + 非全屏右键选词修复 + API Key 鉴权接线
+
+**背景**：四项均来自使用者实测反馈 —— ① 同时多开窗口后，关闭其中一个则其余窗口全部不可用；② 从含公式的 PDF 文本层制卡后正文错乱（连字符断词、重音错位、中文被硬换行切开）；③ 卡片纯文本换行/对齐差（正文居中、参差）；④ 只有全屏模式才能用右键选词。另：核查设置页宣称的「API Key 鉴权」时，确认其实现（`check_api_key()`）定义了却从未接线，属死代码。
+
+**🔧 修复**
+- **多窗口：关闭任一窗口不再影响其余窗口**（`run_desktop.py` + `backend/api.py`）：新增**窗口在线状态（presence）**——每个窗口进程每 8s 向 `POST /api/presence` 心跳（关闭时带 bye）；服务端在**最后一个窗口离开**（正常关闭，或崩溃/被强杀后心跳超过 30s 被剪除）再等 8s 优雅期后自行停服。承载服务的实例在其主窗口关闭后**留在后台陪跑**（不再直接退进程），直到最后一个窗口退出才真正结束——此前它一关窗进程即退出，把跑在自己线程里的服务一并带走，这正是"关一个、全瘫"的根因。附两处加固：`_port_free()` 在 Windows 改用 `SO_EXCLUSIVEADDRUSE`（`SO_REUSEADDR` 会把别人已监听的端口误判为空 → 双实例抢绑同一端口）；`resolve_port()` 对"端口被占但健康检查尚未应答"的兄弟实例给最多 10s 冷启动等待，就绪后附加上去而非另起第二个服务。`run.py` 开发服务器不注册 idle 钩子，永不自动退出。
+- **卡片文本渲染错乱**（新增 `frontend/js/textnorm.js`，`reader.js`/`review.js` 接入）：选区文本不再直接取浏览器字符串，而是按文本层几何**重建**——行内保持 DOM（内容流）顺序、按行归组；清掉 PDF 硬换行（中文跨行直接相接、中英之间补空格）、断词连字符（`Boltz-\nmann` → `Boltzmann`）、散落的组合重音字形（`ικ´oς` → `ικός`，NFC 合成）、软连字符与重复空格；段落按"首行缩进"识别并保留为 `\n\n`。高亮 / 笔记 / 卡片 / 批注栏 / 高亮弹窗统一使用该文本；复习页渲染时也会对旧卡片做一次规范化（历史数据同样受益）。注：pdf.js 文本层自身在公式/斜体处注入的字距空格（如 `στ oχαστ`）属提取层固有限制，字符串层无法可靠还原。
+- **卡片正文换行与对齐**（`style.css`）：`.card-back` 由居中改为**左对齐**、行高 1.7（保留 `pre-wrap` 以呈现段落），长段落不再居中参差。
+- **非全屏右键选词失效**（`reader.js`）：根因是把 `containsNode` 当成 Range 的方法调用（实际是 `Selection.containsNode`），已有选区时抛 `TypeError`——而它发生在 `preventDefault()` 之后，于是原生菜单被吞、选词与浮动工具条都未执行（全屏进入时页面重排会清空选区，才"偶然可用"，造成"只有全屏能右键"的假象）。改为 `selectionCovers()`（`Selection.containsNode` / `Range.intersectsNode` 双路 + try/catch 兜底），并让右键可以**穿透自己的高亮 / 笔记针覆盖层**（`elementsFromPoint` + 按矩形反查文本层 span；`caretRangeFromPoint` 被挡时按字符矩形定位偏移再扩词）。
+- **API Key 鉴权真正生效**（`backend/api.py`）：移除定义后从未接线的死代码 `check_api_key()`，改为 HTTP 中间件统一守卫 `/api/*`——**本机请求免鉴权**（回环地址且 Origin 为本机，桌面窗口 / 本机浏览器 UI 照常工作），**非本机请求**（LAN 客户端，或带外站 Origin 的跨站脚本借道本机回环）必须携带 `X-API-Key` 头或 `?api_key=`，密钥比较用 `hmac.compare_digest` 常量时间比对，缺失/错误返回 401。设置页既有文案（"设置 API Key 后外部脚本调用 /api 需带 X-API-Key"）自此成立。
+
+**✅ 验证**
+- `tools/test_textnorm.mjs`（新增，node 直跑，12 项）：连字符断词 / 中文跨行 / 中英间距 / 重音合成 / 段落保留 / 幂等 / 空输入 —— **12 passed / 0 failed**
+- `tools/test_multiwin.py`（新增）：A/B 双窗口，A 退出后服务端在 grace 期内仍健康且只剩 B 注册（核心回归点）；B 退出后服务端自行停止；`run.py`（无钩子）不受空置影响 —— 全部通过
+- `tools/test_desktop_logic.py` 7 项通过；`tools/check_imports.py` 干净；`tools/check_i18n.py` 0 缺英译 / 0 后端漂移；`node --check` 全部改动模块通过
+- `tools/test_backend.py` 对源码服务器（8399）**122 passed / 0 failed**（连续两轮全绿；新增 17f 段 15 项：设置 Key 后本机请求仍免鉴权、跨站 Origin 无 Key → 401、正确 `X-API-Key` / `?api_key=` → 200、错误 Key → 401、本机 Origin 免鉴权、Key 复原；另注入式单测覆盖 `_is_local_request` 的客户端主机分支——LAN 客户端不享受回环豁免、畸形 Origin 判非本机）
+- Playwright 无头实测（xelatex 生成的含公式/断词中文样张，独立 dev 库）：已有选区时右键选词 ✓；右键落在自己的高亮上仍能选词 ✓；制卡入库文本为 `… Gibbs, Boltzmann, Poincaré … Kolmogorov 建立的公理化体系`（连字符合并、重音合成、中文跨行相接、段落 `\n\n` 保留）✓；复习页展示答案后正文左对齐（实测各行左边界一致、右边界参差）✓。测试样张与临时产物已清理，dev 库恢复 15 篇 / 0 卡
+- 真实双窗口实测（源码 `run_desktop.py`，两个真实窗口进程经 `POST /api/presence` 注册）：A/B 两窗同时在线 clients=2 且 B 未另起服务；经 `WM_CLOSE` 关闭 A 的窗口后服务仍健康、clients=1、A 进程后台陪跑；关闭 B 后服务自行停止、两进程均退出 —— 全部通过
+
+**🔨 构建修复（本轮打包时发现）**：`build_exe.py` 新增 `BIG_OPTIONAL_EXCLUDES`——静态分析会跟踪 try/except 形式的可选导入，在一台装有数据科学栈的机器上，依赖闭包经三条链把整个 ML/Jupyter 栈拖进图：① `backend.ocr → fitz/pymupdf → pymupdf.table → pandas → scipy → scipy._lib.array_api_compat → torch → tensorflow/torchvision/sympy/networkx…`（pymupdf 是 9-12 晚新装的，这也解释了为何 9-10 的构建不受影响）；② `backend.ai → httpx → httpx._main → rich → rich.jupyter → IPython → ipywidgets → matplotlib/ipykernel/zmq`；③ `pandas._testing → pytest` 等。后果：包体膨胀（torch 一项约 2 GB），且 PyInstaller 的「按包逐个 import 探 DLL」阶段在 torch 的 DLL 加载上崩溃（access violation）并反复重试，构建卡死 40 分钟以上、日志刷出 200 余条崩溃栈。现对 ~40 个运行时用不到的可选包（torch/pandas/scipy/matplotlib/IPython/jupyter/rich/numba/sympy/pytest…）统一 `--exclude-module`；镜检探针（同参数、跳过二进制阶段）确认重包全部从图中消失、webview/pythonnet/pymupdf/fitz/cryptography/PIL/numpy/jieba/uvicorn 等必需件全部在位，构建时间从「335s 分析 + 40 分钟崩溃重试」降至 **约 2.5 分钟、0 崩溃**。
+
+**📦 版本与发布包**：`backend/api.py` 的 `version` 由 `0.8.0` 提到 **`0.9.0`**（`/api/openapi.json`、`/api/docs`、exe 版本资源随之；中英 README 的「当前版本」同步更新）。流程与结果——备份生产数据（`backup\dist-data-20260913-v27`，2495 文件 / 1.097 GB）→ 重建冻结 exe（exit 0）→ 恢复数据（2495 文件一致）→ 冻结冒烟通过（~1.0s 就绪、`docs=32`）→ 重打 `release\PaperFlow-win64-v0.9.0.zip`（2209 成员 / 122.5 MB；不含 `data\`；包内 exe 与 `dist` sha256 一致；前端标记 `textnorm.js`/`quoteFromRange`/`normalizePdfText`/`node[?color]`/`review-meta` 与「.card-back 左对齐」全部断言通过；README 双语为 v0.9.0）→ **解压实跑**：`/api/openapi.json` = `0.9.0`、含 `POST /api/presence` 与文档 unlock 端点、空库 `documents=0`、`/` 与 `/js/textnorm.js` 正常从包内送达。体积较 v0.8.0（99.7 MB）增加约 23 MB，来源为**新纳入的 pymupdf（38 MB，更稳的 PDF 渲染器）与 cryptography（10 MB，AES 加密 PDF 的文本提取依赖）**及随附 VC 运行库，其余构成不变。新 exe sha256 `4b062766…`、zip sha256 `a14b2d2c…`（`release\360-误报申诉说明.md` 已同步）。
+
+> 附注：`dist\PaperFlow\data` 从未随包分发；两次打包（同一进程内重跑）产出的 zip 逐字节一致（sha256 相同）。
+
+---
+
 ## 2026-09-10 · v0.8.0 补充：图谱节点配色修复 + 复习页重影修复 + README 截图换代
 
 **背景**：为 README 重拍 v0.8.0 截图时，在干净的演示库上发现两处既有 UI 缺陷（与截图工作无关）。
